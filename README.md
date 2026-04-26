@@ -8,6 +8,26 @@ fresh machine because `gh` isn't installed and you're not authenticated yet.
 Hosting the small bootstrap launcher on a public repo — separate from the
 secrets-bearing dotfiles content — solves that without exposing the rest.
 
+## The init / prereq phase
+
+Every entry point below begins with the same minimal init phase:
+
+| Prereq | Why | Install path |
+|---|---|---|
+| `gh` | Auth + clone the private dotfiles repo | winget / apt |
+| `chezmoi` | Apply / diff dotfiles | winget / curl `get.chezmoi.io` |
+| `bun` | Install Claude Code CLI (no Node required) | `bun.sh/install.ps1` / `bun.sh/install` |
+| **Claude Code CLI** | Run the `dotfiles-incorporate` skill that executes `decisions.json` | `bun install -g @anthropic-ai/claude-code` |
+| `pwsh` (Linux only) | Run the cross-platform `audit-and-diff.ps1` | user-scope tarball |
+
+After install, two things require **interactive auth** (one-time, browser flow):
+
+1. **`gh auth login --web`** — prompted automatically by the launcher when needed.
+2. **`claude` (run once)** — Claude Code CLI's first-run prompts for Claude.ai login.
+   The launchers print a yellow warning if `~/.claude/.credentials.json` is absent.
+
+Once both are authed, every workflow below works end-to-end with no further prompts.
+
 ## One-line entry points
 
 ### Full bootstrap — install + apply
