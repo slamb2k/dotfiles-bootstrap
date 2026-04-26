@@ -294,7 +294,7 @@ Field 'User'         $env:USERNAME
 Field 'Chezmoi'      (& chezmoi --version)
 Field 'Source dir'   (HLink $srcDir)
 Field 'Repo state'   $(if ($wasFresh) { "$YELLOW(just cloned, never applied)$RST" } else { "$GREEN(present)$RST" })
-Field 'Drift'        $(if ($driftCount -eq 0) { "$GREEN0 changes - in sync$RST" } else { "$YELLOW$driftCount file(s) differ$RST" })
+Field 'Managed drift' $(if ($driftCount -eq 0) { "$GREEN" + "0 chezmoi-tracked files differ$RST" } else { "$YELLOW$driftCount chezmoi-tracked file(s) differ$RST  $DIM(audit will also report inventory drift + unmanaged dotfiles)$RST" })
 Field 'gh auth'      "$GREEN(ready)$RST"
 Field 'Claude Code'  $(if ($claudeAuthed) { "$GREEN(authed)$RST" } else { "$YELLOW(installed; run claude once for auth)$RST" })
 Field 'Enterprise'   $(if ($intuneEnrolled) { "$YELLOW(workplace-joined / Azure AD)$RST" } else { "$GREEN(personal device)$RST" })
