@@ -5,11 +5,12 @@
 # Invoke:
 #   curl -fsSL https://raw.githubusercontent.com/slamb2k/dotfiles-bootstrap/main/audit.sh | bash
 #
-# Strictly read-only against system state. Will install gh + chezmoi if
-# missing, authenticate with GitHub if necessary, and ensure the private
-# dotfiles repo is cloned at ~/.local/share/chezmoi. Then runs
-# scripts/audit-and-diff.ps1 (via pwsh if available) OR prints WSL diff
-# directly. Never applies chezmoi changes.
+# Strictly read-only against system state. Will install gh, chezmoi, and
+# pwsh (all user-scope tooling) if missing, authenticate with GitHub if
+# necessary, and ensure the private dotfiles repo is cloned at
+# ~/.local/share/chezmoi. Then runs scripts/audit-and-diff.ps1 to produce
+# the same rich markdown + HTML + items.json artefacts you'd get on
+# Windows. Never applies chezmoi changes.
 
 set -euo pipefail
 
@@ -78,28 +79,24 @@ else
 fi
 ok 'dotfiles source available'
 
-# 5. run the audit
-section 'running chezmoi diff'
-chezmoi diff --no-tty 2>/dev/null || chezmoi diff || true
-
-# Bonus: if pwsh is around, run the full PS audit script too
-if cmd_exists pwsh; then
-    section 'running scripts/audit-and-diff.ps1 via pwsh'
-    pwsh -File "$SRC/scripts/audit-and-diff.ps1" -SkipWsl || true
-else
-    cat <<EOF
-
-The full markdown audit (audit-and-diff.ps1) is PowerShell-only. To run it
-from Linux, install pwsh:
-
-    sudo apt install -y wget apt-transport-https software-properties-common
-    wget -q https://packages.microsoft.com/config/ubuntu/\$(lsb_release -rs)/packages-microsoft-prod.deb
-    sudo dpkg -i packages-microsoft-prod.deb
-    sudo apt update && sudo apt install -y powershell
-
-Or just run it from a Windows shell - it covers WSL too.
-
-EOF
+# 5. install pwsh user-scope if missing (needed for the rich audit)
+if ! cmd_exists pwsh && [ ! -x "$HOME/.local/share/powershell/pwsh" ]; then
+    section 'install pwsh (user-scope tarball, no sudo)'
+    PWSH_VER="${PWSH_VER:-7.4.6}"
+    mkdir -p "$HOME/.local/share/powershell"
+    curl -fsSL "https://github.com/PowerShell/PowerShell/releases/download/v${PWSH_VER}/powershell-${PWSH_VER}-linux-x64.tar.gz" \
+        | tar -xzf - -C "$HOME/.local/share/powershell"
+    chmod +x "$HOME/.local/share/powershell/pwsh"
+    ln -sf "$HOME/.local/share/powershell/pwsh" "$HOME/.local/bin/pwsh"
+    ok "pwsh installed at ~/.local/share/powershell/pwsh"
 fi
+PWSH="$(command -v pwsh || echo "$HOME/.local/bin/pwsh")"
 
-ok 'audit complete; no system state modified beyond gh+chezmoi installs'
+# 6. run the rich audit (cross-platform PowerShell script)
+section "running scripts/audit-and-diff.ps1 via pwsh"
+"$PWSH" -NoProfile -File "$SRC/scripts/audit-and-diff.ps1" || true
+
+ok 'audit complete; no system state modified beyond gh + chezmoi + pwsh user-scope installs'
+echo
+echo "Open the HTML report in your browser:"
+echo "  xdg-open ./audit-output-*/report.html   # or just navigate to the file"
