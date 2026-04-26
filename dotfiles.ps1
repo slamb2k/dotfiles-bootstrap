@@ -23,6 +23,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Force UTF-8 output so Unicode banner glyphs and OSC 8 hyperlinks render
+# correctly in Windows Terminal / Warp / etc. Default codepage on Windows
+# strips the multi-byte chars to '?' otherwise.
+try {
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    $OutputEncoding           = [System.Text.Encoding]::UTF8
+} catch {}
+
 # ----- ANSI helpers ---------------------------------------------------------
 
 $E       = [char]27
@@ -375,5 +383,5 @@ if (-not $claudeAuthed) {
 }
 Write-Host ""
 Write-Host "  Re-run any time:"
-Write-Host "  $BOLD" + "iwr -useb https://raw.githubusercontent.com/slamb2k/dotfiles-bootstrap/main/dotfiles.ps1 | iex" + "$RST"
+Write-Host ("  ${BOLD}iwr -useb https://raw.githubusercontent.com/slamb2k/dotfiles-bootstrap/main/dotfiles.ps1 | iex${RST}")
 Write-Host ""
