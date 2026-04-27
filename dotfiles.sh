@@ -43,34 +43,65 @@ TTY=0
 if [ -t 0 ] || [ ! -e /dev/tty ]; then : ; else exec </dev/tty; fi
 if [ -t 0 ] || [ -t 1 ]; then TTY=1; fi
 
-# ----- ASCII banner ---------------------------------------------------------
+# Locale check - safe to emit Unicode block chars only if the terminal
+# is UTF-8. On modern Linux/WSL this is essentially always true, but
+# minimal containers and some sshd setups still ship POSIX/C locale.
+UNICODE_OK=0
+case "${LC_ALL:-${LANG:-}}" in *UTF-8*|*utf8*|*utf-8*) UNICODE_OK=1 ;; esac
 
-show_banner() {
-    # Pure ASCII (figlet 'Big' font) - matches the PowerShell launcher and
-    # renders identically regardless of terminal/locale/font.
-    printf '\n'
-    printf '  %s _____   ____ _______ ______ _____ _      ______  _____ %s\n'  "$CYN" "$RST"
-    printf '  %s|  __ \\ / __ \\__   __|  ____|_   _| |    |  ____|/ ____|%s\n' "$CYN" "$RST"
-    printf '  %s| |  | | |  | | | |  | |__    | | | |    | |__  | (___  %s\n' "$CYN" "$RST"
-    printf '  %s| |  | | |  | | | |  |  __|   | | | |    |  __|  \\___ \\ %s\n' "$CYN" "$RST"
-    printf '  %s| |__| | |__| | | |  | |     _| |_| |____| |____ ____) |%s\n' "$CYN" "$RST"
-    printf '  %s|_____/ \\____/  |_|  |_|    |_____|______|______|_____/ %s\n' "$CYN" "$RST"
-    printf '  %sslamb2k/dotfiles  |  unified launcher  |  audit  apply  full%s\n\n' "$DIM" "$RST"
+if [ "$UNICODE_OK" = "1" ]; then
+    ARROW_SM=$'\xe2\x96\xb8'   # U+25B8
+    ARROW_LG=$'\xe2\x96\xb6'   # U+25B6
+    SEP=$'\xc2\xb7'            # U+00B7
+else
+    ARROW_SM='>'
+    ARROW_LG='>>'
+    SEP='|'
+fi
+
+# ----- Banner ---------------------------------------------------------------
+
+        # ANSI Shadow figlet (DOTFILES) with 256-colour gradient.
+        printf '  \033[38;5;105m██████╗  ██████╗ ████████╗███████╗██╗██╗     ███████╗███████╗%s\n' "$RST"
+        printf '  \033[38;5;105m██╔══██╗██╔═══██╗╚══██╔══╝██╔════╝██║██║     ██╔════╝██╔════╝%s\n' "$RST"
+        printf '  \033[38;5;111m██║  ██║██║   ██║   ██║   █████╗  ██║██║     █████╗  ███████╗%s\n' "$RST"
+        printf '  \033[38;5;111m██║  ██║██║   ██║   ██║   ██╔══╝  ██║██║     ██╔══╝  ╚════██║%s\n' "$RST"
+        printf '  \033[38;5;117m██████╔╝╚██████╔╝   ██║   ██║     ██║███████╗███████╗███████║%s\n' "$RST"
+        printf '  \033[38;5;117m╚═════╝  ╚═════╝    ╚═╝   ╚═╝     ╚═╝╚══════╝╚══════╝╚══════╝%s\n' "$RST"
+        printf '  %sslamb2k/dotfiles  %s  unified launcher  %s  audit %s apply %s full%s\n\n' "$DIM" "$SEP" "$SEP" "$SEP" "$SEP" "$RST"
+    else
+        # Pure-ASCII fallback (figlet 'Big' font) for POSIX/C locales.
+        printf '  %s _____   ____ _______ ______ _____ _      ______  _____ %s\n'  "$CYN" "$RST"
+        printf '  %s|  __ \\ / __ \\__   __|  ____|_   _| |    |  ____|/ ____|%s\n' "$CYN" "$RST"
+        printf '  %s| |  | | |  | | | |  | |__    | | | |    | |__  | (___  %s\n' "$CYN" "$RST"
+        printf '  %s| |  | | |  | | | |  |  __|   | | | |    |  __|  \\___ \\ %s\n' "$CYN" "$RST"
+        printf '  %s| |__| | |__| | | |  | |     _| |_| |____| |____ ____) |%s\n' "$CYN" "$RST"
+        printf '  %s|_____/ \\____/  |_|  |_|    |_____|______|______|_____/ %s\n' "$CYN" "$RST"
+        printf '  %sslamb2k/dotfiles  |  unified launcher  |  audit  apply  full%s\n\n' "$DIM" "$RST"
+    fi
 }
 
 # ----- Spinner --------------------------------------------------------------
 
 with_spinner() {
     local msg="$1"; shift
-    # ASCII-only spinner for parity across locales / minimal Linux distros.
-    local frames='|/-\'
-    local n=${#frames}
+    # Use an array so each frame is one element regardless of byte width
+    # (bash's ${var:i:1} slices BYTES, which would shred UTF-8 sequences).
+    local -a frames
+    if [ "$UNICODE_OK" = "1" ]; then
+        frames=($'\xe2\xa0\x8b' $'\xe2\xa0\x99' $'\xe2\xa0\xb9' $'\xe2\xa0\xb8' \
+                $'\xe2\xa0\xbc' $'\xe2\xa0\xb4' $'\xe2\xa0\xa6' $'\xe2\xa0\xa7' \
+                $'\xe2\xa0\x87' $'\xe2\xa0\x8f')
+    else
+        frames=('|' '/' '-' '\')
+    fi
+    local n=${#frames[@]}
     "$@" >/dev/null 2>&1 &
     local pid=$!
     local i=0
     tput civis 2>/dev/null || true
     while kill -0 "$pid" 2>/dev/null; do
-        local f="${frames:$((i % n)):1}"
+        local f="${frames[$((i % n))]}"
         printf '\r  %s%s%s %s  ' "$CYN" "$f" "$RST" "$msg"
         sleep 0.08
         i=$((i + 1))
@@ -137,7 +168,7 @@ choose_mode() {
             local prefix=""
             local suffix="$RST"
             if [ "$j" = "$idx" ]; then
-                marker="$GRN>$RST "
+                marker="$GRN$ARROW_SM$RST "
                 prefix="$BOLD$INVERT "
                 suffix=" $RST"
             fi
@@ -317,7 +348,7 @@ field 'Claude Code'  "$([ "$CLAUDE_AUTHED" = "1" ] && printf '%s(authed)%s' "$GR
 
 section 'Choose mode'
 
-printf '\n  %s%s>>  Recommended: %s%s\n\n' "$BOLD" "$GRN" "$(printf '%s' "$RECOMMENDED" | tr a-z A-Z)" "$RST"
+printf '\n  %s%s%s  Recommended: %s%s\n\n' "$BOLD" "$GRN" "$ARROW_LG" "$(printf '%s' "$RECOMMENDED" | tr a-z A-Z)" "$RST"
 
 if [ -n "$MODE" ]; then
     printf '  %s(MODE env var set: %s)%s\n' "$DIM" "$MODE" "$RST"
@@ -334,7 +365,7 @@ fi
 
 if [ "$MODE" = 'exit' ]; then printf '\n  Stopped on request.\n'; exit 0; fi
 
-printf '\n  %s%s>>  Running mode: %s%s\n\n' "$BOLD" "$MAG" "$MODE" "$RST"
+printf '\n  %s%s%s  Running mode: %s%s\n\n' "$BOLD" "$MAG" "$ARROW_LG" "$MODE" "$RST"
 
 # ============================================================================
 # Phase 4 - dispatch

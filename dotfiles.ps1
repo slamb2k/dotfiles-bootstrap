@@ -27,12 +27,23 @@ $ErrorActionPreference = 'Stop'
 # characters render. PowerShell 5.1's host caches its writer at startup,
 # so [Console]::OutputEncoding alone isn't enough - chcp 65001 also
 # changes the conhost code page which Write-Host actually goes through.
-# (The banner itself is ASCII-only on purpose; this is for everything else.)
 try {
     & chcp 65001 2>&1 | Out-Null
     [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
     $OutputEncoding           = [System.Text.Encoding]::UTF8
 } catch {}
+
+# Decide once whether we trust the host with multi-byte UTF-8 glyphs.
+# PS 7+ uses UTF-8 throughout and doesn't have PS 5.1's cached-writer
+# problem, so block-drawing chars (U+2500-U+259F) and braille (U+28xx)
+# are safe. On PS 5.1 we fall back to pure ASCII to avoid mojibake.
+$script:UnicodeOk = ($PSVersionTable.PSVersion.Major -ge 7)
+
+# Pre-compute marker glyphs once. Using [char] codepoints keeps the source
+# file pure ASCII on disk so PS 5.1 parses it cleanly even without a BOM.
+$ARROW_SM = if ($script:UnicodeOk) { [char]0x25B8 } else { '>'  }   # menu pointer
+$ARROW_LG = if ($script:UnicodeOk) { [char]0x25B6 } else { '>>' }   # phase marker
+$SEP      = if ($script:UnicodeOk) { [char]0x00B7 } else { '|'  }   # tagline separator
 
 # ----- ANSI helpers ---------------------------------------------------------
 
@@ -68,20 +79,33 @@ function Cmd-Exists { param([string]$N) [bool] (Get-Command $N -ErrorAction Sile
 # ----- ASCII banner ---------------------------------------------------------
 
 function Show-Banner {
-    # Pure ASCII (figlet 'Big' font) - renders identically on any terminal,
-    # codepage, or font. Box-drawing glyphs were unreliable on PS 5.1 +
-    # legacy conhost.
     Write-Host ""
-    $b = @(
-        " _____   ____ _______ ______ _____ _      ______  _____ ",
-        "|  __ \ / __ \__   __|  ____|_   _| |    |  ____|/ ____|",
-        "| |  | | |  | | | |  | |__    | | | |    | |__  | (___  ",
-        "| |  | | |  | | | |  |  __|   | | | |    |  __|  \___ \ ",
-        "| |__| | |__| | | |  | |     _| |_| |____| |____ ____) |",
-        "|_____/ \____/  |_|  |_|    |_____|______|______|_____/ "
-    )
-    foreach ($l in $b) { Write-Host "  $CYAN$l$RST" }
-    Write-Host "  ${DIM}slamb2k/dotfiles  |  unified launcher  |  audit  apply  full${RST}"
+    if ($script:UnicodeOk) {
+        # ANSI Shadow figlet - U+2500-U+259F box-drawing glyphs.
+        # Requires PS 7+ and a font like Cascadia Mono / JetBrains Mono.
+        $b = @(
+            "$E[38;5;105m" + "██████╗  ██████╗ ████████╗███████╗██╗██╗     ███████╗███████╗" + $RST,
+            "$E[38;5;105m" + "██╔══██╗██╔═══██╗╚══██╔══╝██╔════╝██║██║     ██╔════╝██╔════╝" + $RST,
+            "$E[38;5;111m" + "██║  ██║██║   ██║   ██║   █████╗  ██║██║     █████╗  ███████╗" + $RST,
+            "$E[38;5;111m" + "██║  ██║██║   ██║   ██║   ██╔══╝  ██║██║     ██╔══╝  ╚════██║" + $RST,
+            "$E[38;5;117m" + "██████╔╝╚██████╔╝   ██║   ██║     ██║███████╗███████╗███████║" + $RST,
+            "$E[38;5;117m" + "╚═════╝  ╚═════╝    ╚═╝   ╚═╝     ╚═╝╚══════╝╚══════╝╚══════╝" + $RST
+        )
+        foreach ($l in $b) { Write-Host "  $l" }
+        Write-Host "  ${DIM}slamb2k/dotfiles  ·  unified launcher  ·  audit · apply · full${RST}"
+    } else {
+        # Pure-ASCII fallback (figlet 'Big' font) for PS 5.1 + legacy conhost.
+        $b = @(
+            " _____   ____ _______ ______ _____ _      ______  _____ ",
+            "|  __ \ / __ \__   __|  ____|_   _| |    |  ____|/ ____|",
+            "| |  | | |  | | | |  | |__    | | | |    | |__  | (___  ",
+            "| |  | | |  | | | |  |  __|   | | | |    |  __|  \___ \ ",
+            "| |__| | |__| | | |  | |     _| |_| |____| |____ ____) |",
+            "|_____/ \____/  |_|  |_|    |_____|______|______|_____/ "
+        )
+        foreach ($l in $b) { Write-Host "  $CYAN$l$RST" }
+        Write-Host "  ${DIM}slamb2k/dotfiles  |  unified launcher  |  audit  apply  full${RST}"
+    }
     Write-Host ""
 }
 
@@ -89,8 +113,13 @@ function Show-Banner {
 
 function With-Spinner {
     param([string]$Message, [scriptblock]$Action)
-    # ASCII-only spinner. Braille (U+28xx) was unreliable on PS 5.1 + legacy hosts.
-    $frames = @('|','/','-','\')
+    # Braille frames on PS 7+, ASCII rotation on PS 5.1 (U+28xx is unreliable
+    # on the legacy host even with chcp 65001).
+    $frames = if ($script:UnicodeOk) {
+        @([char]0x280B, [char]0x2819, [char]0x2839, [char]0x2838, [char]0x283C, [char]0x2834, [char]0x2826, [char]0x2827, [char]0x2807, [char]0x280F)
+    } else {
+        @('|','/','-','\')
+    }
     $job = Start-Job -ScriptBlock $Action
     $i = 0
     try { [Console]::CursorVisible = $false } catch {}
@@ -158,7 +187,7 @@ function Choose-Mode {
             for ($i = 0; $i -lt $Options.Count; $i++) {
                 $desc = if ($i -lt $Descriptions.Count) { "  $DIM$($Descriptions[$i])$RST" } else { '' }
                 if ($i -eq $idx) {
-                    $line = "  $GREEN>$RST $BOLD$INVERT $($Options[$i]) $RST$desc"
+                    $line = "  $GREEN$ARROW_SM$RST $BOLD$INVERT $($Options[$i]) $RST$desc"
                 } else {
                     $line = "    $($Options[$i])$desc"
                 }
@@ -313,7 +342,7 @@ Field 'Enterprise'   $(if ($intuneEnrolled) { "$YELLOW(workplace-joined / Azure 
 Section 'Choose mode'
 
 Write-Host ""
-Write-Host "  $BOLD$GREEN>>  Recommended: $($recommended.ToUpper())$RST"
+Write-Host "  $BOLD$GREEN$ARROW_LG  Recommended: $($recommended.ToUpper())$RST"
 Write-Host ""
 
 $opts  = @('audit','apply','full','exit')
@@ -344,7 +373,7 @@ if ($Mode -eq 'full' -and $intuneEnrolled -and -not $Yes) {
 if ($Mode -eq 'exit') { Write-Host "`n  Stopped on request."; exit 0 }
 
 Write-Host ""
-Write-Host "  $BOLD$MAGENTA>>  Running mode: $Mode$RST"
+Write-Host "  $BOLD$MAGENTA$ARROW_LG  Running mode: $Mode$RST"
 
 # ============================================================================
 # Phase 4 - dispatch
