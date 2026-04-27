@@ -46,21 +46,24 @@ if [ -t 0 ] || [ -t 1 ]; then TTY=1; fi
 # ----- ASCII banner ---------------------------------------------------------
 
 show_banner() {
+    # Pure ASCII (figlet 'Big' font) - matches the PowerShell launcher and
+    # renders identically regardless of terminal/locale/font.
     printf '\n'
-    printf '  %s██████╗  ██████╗ ████████╗███████╗██╗██╗     ███████╗███████╗%s\n' "$CYN" "$RST"
-    printf '  %s██╔══██╗██╔═══██╗╚══██╔══╝██╔════╝██║██║     ██╔════╝██╔════╝%s\n' "$CYN" "$RST"
-    printf '  %s██║  ██║██║   ██║   ██║   █████╗  ██║██║     █████╗  ███████╗%s\n' "$CYN" "$RST"
-    printf '  %s██║  ██║██║   ██║   ██║   ██╔══╝  ██║██║     ██╔══╝  ╚════██║%s\n' "$CYN" "$RST"
-    printf '  %s██████╔╝╚██████╔╝   ██║   ██║     ██║███████╗███████╗███████║%s\n' "$CYN" "$RST"
-    printf '  %s╚═════╝  ╚═════╝    ╚═╝   ╚═╝     ╚═╝╚══════╝╚══════╝╚══════╝%s\n' "$CYN" "$RST"
-    printf '  %sslamb2k/dotfiles · unified launcher · audit · apply · full%s\n\n' "$DIM" "$RST"
+    printf '  %s _____   ____ _______ ______ _____ _      ______  _____ %s\n'  "$CYN" "$RST"
+    printf '  %s|  __ \\ / __ \\__   __|  ____|_   _| |    |  ____|/ ____|%s\n' "$CYN" "$RST"
+    printf '  %s| |  | | |  | | | |  | |__    | | | |    | |__  | (___  %s\n' "$CYN" "$RST"
+    printf '  %s| |  | | |  | | | |  |  __|   | | | |    |  __|  \\___ \\ %s\n' "$CYN" "$RST"
+    printf '  %s| |__| | |__| | | |  | |     _| |_| |____| |____ ____) |%s\n' "$CYN" "$RST"
+    printf '  %s|_____/ \\____/  |_|  |_|    |_____|______|______|_____/ %s\n' "$CYN" "$RST"
+    printf '  %sslamb2k/dotfiles  |  unified launcher  |  audit  apply  full%s\n\n' "$DIM" "$RST"
 }
 
 # ----- Spinner --------------------------------------------------------------
 
 with_spinner() {
     local msg="$1"; shift
-    local frames='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    # ASCII-only spinner for parity across locales / minimal Linux distros.
+    local frames='|/-\'
     local n=${#frames}
     "$@" >/dev/null 2>&1 &
     local pid=$!
@@ -134,7 +137,7 @@ choose_mode() {
             local prefix=""
             local suffix="$RST"
             if [ "$j" = "$idx" ]; then
-                marker="$GRN▸$RST "
+                marker="$GRN>$RST "
                 prefix="$BOLD$INVERT "
                 suffix=" $RST"
             fi
@@ -314,7 +317,7 @@ field 'Claude Code'  "$([ "$CLAUDE_AUTHED" = "1" ] && printf '%s(authed)%s' "$GR
 
 section 'Choose mode'
 
-printf '\n  %s%s▸ Recommended: %s%s\n\n' "$BOLD" "$GRN" "$(printf '%s' "$RECOMMENDED" | tr a-z A-Z)" "$RST"
+printf '\n  %s%s>>  Recommended: %s%s\n\n' "$BOLD" "$GRN" "$(printf '%s' "$RECOMMENDED" | tr a-z A-Z)" "$RST"
 
 if [ -n "$MODE" ]; then
     printf '  %s(MODE env var set: %s)%s\n' "$DIM" "$MODE" "$RST"
@@ -331,7 +334,7 @@ fi
 
 if [ "$MODE" = 'exit' ]; then printf '\n  Stopped on request.\n'; exit 0; fi
 
-printf '\n  %s%s▶ Running mode: %s%s\n\n' "$BOLD" "$MAG" "$MODE" "$RST"
+printf '\n  %s%s>>  Running mode: %s%s\n\n' "$BOLD" "$MAG" "$MODE" "$RST"
 
 # ============================================================================
 # Phase 4 - dispatch

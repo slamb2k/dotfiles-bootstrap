@@ -23,10 +23,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Force UTF-8 output so Unicode banner glyphs and OSC 8 hyperlinks render
-# correctly in Windows Terminal / Warp / etc. Default codepage on Windows
-# strips the multi-byte chars to '?' otherwise.
+# Force UTF-8 output so OSC 8 hyperlinks and any paths with non-ASCII
+# characters render. PowerShell 5.1's host caches its writer at startup,
+# so [Console]::OutputEncoding alone isn't enough - chcp 65001 also
+# changes the conhost code page which Write-Host actually goes through.
+# (The banner itself is ASCII-only on purpose; this is for everything else.)
 try {
+    & chcp 65001 2>&1 | Out-Null
     [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
     $OutputEncoding           = [System.Text.Encoding]::UTF8
 } catch {}
@@ -65,17 +68,20 @@ function Cmd-Exists { param([string]$N) [bool] (Get-Command $N -ErrorAction Sile
 # ----- ASCII banner ---------------------------------------------------------
 
 function Show-Banner {
+    # Pure ASCII (figlet 'Big' font) - renders identically on any terminal,
+    # codepage, or font. Box-drawing glyphs were unreliable on PS 5.1 +
+    # legacy conhost.
     Write-Host ""
     $b = @(
-        "${CYAN}██████╗  ██████╗ ████████╗███████╗██╗██╗     ███████╗███████╗${RST}",
-        "${CYAN}██╔══██╗██╔═══██╗╚══██╔══╝██╔════╝██║██║     ██╔════╝██╔════╝${RST}",
-        "${CYAN}██║  ██║██║   ██║   ██║   █████╗  ██║██║     █████╗  ███████╗${RST}",
-        "${CYAN}██║  ██║██║   ██║   ██║   ██╔══╝  ██║██║     ██╔══╝  ╚════██║${RST}",
-        "${CYAN}██████╔╝╚██████╔╝   ██║   ██║     ██║███████╗███████╗███████║${RST}",
-        "${CYAN}╚═════╝  ╚═════╝    ╚═╝   ╚═╝     ╚═╝╚══════╝╚══════╝╚══════╝${RST}"
+        " _____   ____ _______ ______ _____ _      ______  _____ ",
+        "|  __ \ / __ \__   __|  ____|_   _| |    |  ____|/ ____|",
+        "| |  | | |  | | | |  | |__    | | | |    | |__  | (___  ",
+        "| |  | | |  | | | |  |  __|   | | | |    |  __|  \___ \ ",
+        "| |__| | |__| | | |  | |     _| |_| |____| |____ ____) |",
+        "|_____/ \____/  |_|  |_|    |_____|______|______|_____/ "
     )
-    foreach ($l in $b) { Write-Host "  $l" }
-    Write-Host "  ${DIM}slamb2k/dotfiles · unified launcher · audit · apply · full${RST}"
+    foreach ($l in $b) { Write-Host "  $CYAN$l$RST" }
+    Write-Host "  ${DIM}slamb2k/dotfiles  |  unified launcher  |  audit  apply  full${RST}"
     Write-Host ""
 }
 
@@ -83,7 +89,8 @@ function Show-Banner {
 
 function With-Spinner {
     param([string]$Message, [scriptblock]$Action)
-    $frames = @('⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏')
+    # ASCII-only spinner. Braille (U+28xx) was unreliable on PS 5.1 + legacy hosts.
+    $frames = @('|','/','-','\')
     $job = Start-Job -ScriptBlock $Action
     $i = 0
     try { [Console]::CursorVisible = $false } catch {}
@@ -151,7 +158,7 @@ function Choose-Mode {
             for ($i = 0; $i -lt $Options.Count; $i++) {
                 $desc = if ($i -lt $Descriptions.Count) { "  $DIM$($Descriptions[$i])$RST" } else { '' }
                 if ($i -eq $idx) {
-                    $line = "  $GREEN▸$RST $BOLD$INVERT $($Options[$i]) $RST$desc"
+                    $line = "  $GREEN>$RST $BOLD$INVERT $($Options[$i]) $RST$desc"
                 } else {
                     $line = "    $($Options[$i])$desc"
                 }
@@ -306,7 +313,7 @@ Field 'Enterprise'   $(if ($intuneEnrolled) { "$YELLOW(workplace-joined / Azure 
 Section 'Choose mode'
 
 Write-Host ""
-Write-Host "  $BOLD$GREEN▸ Recommended: $($recommended.ToUpper())$RST"
+Write-Host "  $BOLD$GREEN>>  Recommended: $($recommended.ToUpper())$RST"
 Write-Host ""
 
 $opts  = @('audit','apply','full','exit')
@@ -337,7 +344,7 @@ if ($Mode -eq 'full' -and $intuneEnrolled -and -not $Yes) {
 if ($Mode -eq 'exit') { Write-Host "`n  Stopped on request."; exit 0 }
 
 Write-Host ""
-Write-Host "  $BOLD$MAGENTA▶ Running mode: $Mode$RST"
+Write-Host "  $BOLD$MAGENTA>>  Running mode: $Mode$RST"
 
 # ============================================================================
 # Phase 4 - dispatch
